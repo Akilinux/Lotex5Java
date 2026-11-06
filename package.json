@@ -1,0 +1,20 @@
+{
+  "dependencies": {
+    "express": "^5.3.0",
+    "pdfkit": "^0.20.2",
+    "qrcode": "^1.5.4"
+  },
+  "name": "ejemplos",
+  "version": "1.0.0",
+  "description": "",
+  "main": "app.js",
+  "devDependencies": {},
+    "scripts": {
+    "start": "node app.js"
+  },
+
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs"
+}
