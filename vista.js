@@ -1,9 +1,9 @@
-function generarHTML(appLoteria) {
+function generarHTML(appLoteria, esAdmin = false) {
     const listaHtmlTickets = appLoteria.allSoldTicketsData.map(t => 
         `<li>
             <b>Ticket #${t.ticketId}</b> - ${t.cliente.nombre} (${t.cliente.telefono})<br>
             💰 Valor: $${t.precioTicket || '0.00'}<br>
-             Mulberry Números: ${t.numerosTicket.map(n => String(n).padStart(3, '0')).join(' | ')} <br>
+            Números: ${t.numerosTicket.map(n => String(n).padStart(3, '0')).join(' | ')} <br>
             <a href="/descargar-pdf/${t.ticketId}" style="color: #4CAF50; font-size: 13px; font-weight: bold; text-decoration: none;">📥 Descargar PDF</a>
          </li>`
     ).reverse().join('');
@@ -26,7 +26,6 @@ function generarHTML(appLoteria) {
         htmlGanadores = "<li>Escribe los números ganadores para escanear.</li>";
     }
 
-    // --- GENERACIÓN DINÁMICA DE NÚMEROS DISPONIBLES POR GRUPO ---
     const generarOpcionesGrupo = (min, max) => {
         let opciones = "";
         for (let i = min; i <= max; i++) {
@@ -42,6 +41,45 @@ function generarHTML(appLoteria) {
     const opcionesG3 = generarOpcionesGrupo(400, 599);
     const opcionesG4 = generarOpcionesGrupo(600, 799);
     const opcionesG5 = generarOpcionesGrupo(800, 999);
+
+    // --- BLOQUES CONDICIONALES SEPARADOS ---
+    let bloqueConfiguracion = '<p style="color: #666; margin: 0;">📌 Adquiere tus números seleccionándolos directamente abajo.</p>';
+    let bloqueReportesyPremios = '';
+    let bloqueHistorialyResultados = '';
+
+    if (esAdmin) {
+        bloqueConfiguracion = `
+        <form action="/configurar" method="POST">
+	    <input type="password" name="claveAdmin" placeholder="Definir Clave Administrador" required>
+            <input type="text" name="sorteo" placeholder="Nombre del Sorteo" required>
+            <input type="text" name="precio" placeholder="Precio del ticket (Ej: 5.00)" required>
+            <input type="text" name="nombre" placeholder="Nombre Responsable" required>
+            <input type="text" name="cedula" placeholder="Cédula" required>
+            <input type="text" name="telefono" placeholder="Teléfono" required>
+            <textarea name="descripcion" placeholder="Descripción de la rifa / Premios (2-3 líneas)" required></textarea>
+            <button type="submit" class="btn btn-danger" style="margin:0; width:100%; grid-column: span 4;" onclick="return confirm('¿Seguro que deseas iniciar un sorteo nuevo?')">🔄 Iniciar Sorteo Nuevo</button>
+        </form>`;
+
+        bloqueReportesyPremios = `
+        <h2 style="margin-top:25px;">📊 Reportes y Respaldos</h2>
+        <a href="/reporte-disponibilidad" target="_blank"><button class="btn btn-success">📄 Descargar Reporte Disponibilidad (PDF)</button></a>
+        <!-- NUEVO BOTÓN DE RESPALDO DE BASE DE DATOS -->
+        <a href="/descargar-base-datos"><button class="btn" style="background: #795548; margin-top:5px;">📥 Descargar Respaldo de Datos (JSON)</button></a>
+
+        <h2 style="margin-top:25px;">🏆 Realizar Premiación</h2>
+        <form action="/premiar" method="POST">
+            <div class="inputs-premios">
+                <input type="number" name="n1" required> <input type="number" name="n2" required>
+                <input type="number" name="n3" required> <input type="number" name="n4" required>
+                <input type="number" name="n5" required>
+            </div>
+            <button type="submit" class="btn btn-warn">🔎 Escanear Ganadores</button>
+        </form>`;
+
+        bloqueHistorialyResultados = `
+        <div class="panel"><h2>📊 Historial (${appLoteria.allSoldTicketsData.length})</h2><ul>${listaHtmlTickets || '<li>No hay ventas.</li>'}</ul></div>
+        <div class="panel" style="background:#fbfbfb;"><h2>🥇 Resultados</h2><ul>${htmlGanadores}</ul></div>`;
+    }
 
     return `
     <!DOCTYPE html>
@@ -79,27 +117,20 @@ function generarHTML(appLoteria) {
         <div class="config-box">
             <div class="config-header">
                 <div>
-                    <h1 style="margin:0; font-size:26px;">🎟️ Lotería: ${appLoteria.nombreSorteo} (Valor: $${appLoteria.precioTicket})</h1>
+                    <h1 style="margin:0; font-size:26px;">Lotería: ${appLoteria.nombreSorteo} (Valor: $${appLoteria.precioTicket})</h1>
                     <p style="margin: 5px 0 0 0; color: #aaa; font-style: italic;">"${appLoteria.descripcionSorteo || 'Gran sorteo familiar.'}"</p>
                     <small style="display:block; margin-top:5px; color:#4CAF50">Responsable: ${appLoteria.responsable.nombre} (CI: ${appLoteria.responsable.cedula})</small>
                 </div>
             </div>
-            <form action="/configurar" method="POST">
-                <input type="text" name="sorteo" placeholder="Nombre del Sorteo" required>
-                <input type="text" name="precio" placeholder="Precio del ticket (Ej: 5.00)" required>
-                <input type="text" name="nombre" placeholder="Nombre Responsable" required>
-                <input type="text" name="cedula" placeholder="Cédula" required>
-                <input type="text" name="telefono" placeholder="Teléfono" required>
-                <textarea name="descripcion" placeholder="Descripción de la rifa / Premios (2-3 líneas)" required></textarea>
-                <button type="submit" class="btn btn-danger" style="margin:0; width:100%; grid-column: span 4;" onclick="return confirm('¿Seguro que deseas iniciar un sorteo nuevo?')">🔄 Iniciar Sorteo Nuevo</button>
-            </form>
+            ${bloqueConfiguracion}
         </div>
 
         <div class="container">
             <div class="panel">
-                <h2>🛒 Venta Aleatoria (Dados)</h2>
+                <h2>🛒 Venta Aleatoria (Automática)</h2>
                 <p>Próximo boleto: <b>#${String(appLoteria.nextTicketNumber).padStart(3, '0')}</b></p>
                 <form action="/vender-aleatorio" method="POST">
+                    <input type="hidden" name="esAdmin" value="${esAdmin}">
                     <div class="input-group"><label>Nombre del Cliente:</label><input type="text" name="nombre" required></div>
                     <div class="input-group"><label>Teléfono / WhatsApp:</label><input type="text" name="telefono" required></div>
                     <button type="submit" class="btn">🎲 Generar Números y Vender</button>
@@ -107,6 +138,7 @@ function generarHTML(appLoteria) {
 
                 <h2 style="margin-top:25px;">✏️ Venta Manual (Selección de Números)</h2>
                 <form action="/vender-manual" method="POST">
+                    <input type="hidden" name="esAdmin" value="${esAdmin}">
                     <div class="input-group"><label>Nombre del Cliente:</label><input type="text" name="nombre" required></div>
                     <div class="input-group"><label>Teléfono / WhatsApp:</label><input type="text" name="telefono" required></div>
                     
@@ -120,25 +152,12 @@ function generarHTML(appLoteria) {
                     </div>
                     <button type="submit" class="btn btn-select">🛍️ Validar Selección y Vender</button>
                 </form>
-                
-                <h2 style="margin-top:25px;">📊 Reportes Generales</h2>
-                <a href="/reporte-disponibilidad" target="_blank"><button class="btn btn-success">📄 Descargar Reporte Disponibilidad (PDF)</button></a>
-
-                <h2 style="margin-top:25px;">🏆 Realizar Premiación</h2>
-                <form action="/premiar" method="POST">
-                    <div class="inputs-premios">
-                        <input type="number" name="n1" required> <input type="number" name="n2" required>
-                        <input type="number" name="n3" required> <input type="number" name="n4" required>
-                        <input type="number" name="n5" required>
-                    </div>
-                    <button type="submit" class="btn btn-warn">🔎 Escanear Ganadores</button>
-                </form>
+                ${bloqueReportesyPremios}
             </div>
-            <div class="panel"><h2>📊 Historial (${appLoteria.allSoldTicketsData.length})</h2><ul>${listaHtmlTickets || '<li>No hay ventas.</li>'}</ul></div>
-            <div class="panel" style="background:#fbfbfb;"><h2>🥇 Resultados</h2><ul>${htmlGanadores}</ul></div>
+            ${bloqueHistorialyResultados}
         </div>
     </body>
     </html>`;
 }
+module.exports = { generarHTML };
 
-module.exports = generarHTML;

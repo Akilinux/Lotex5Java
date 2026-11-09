@@ -14,6 +14,7 @@ class LoteriaApp {
         this.allSoldTicketsData = [];
         this.ultimosGanadoresEncontrados = [];
         this.ultimosNumerosBuscados = [];
+	this.claveAdmin = "admin123"; // Clave por defecto inicial
         this.gruposData = {
             "Grupo I":   { min: 0,   max: 199 },
             "Grupo II":  { min: 200, max: 399 },
@@ -34,6 +35,7 @@ class LoteriaApp {
             this.soldNumbers = new Set(loaded.soldNumbers || []);
             this.allSoldTicketsData = loaded.allSoldTicketsData || [];
             this.responsable = loaded.responsable || { nombre: "Carlos Pérez", cedula: "12345678", telefono: "04125555555" };
+	    this.claveAdmin = loaded.claveAdmin || "admin123";
         } catch (error) {
             await this.saveData();
         }
@@ -47,23 +49,25 @@ class LoteriaApp {
             nextTicketNumber: this.nextTicketNumber,
             soldNumbers: Array.from(this.soldNumbers),
             allSoldTicketsData: this.allSoldTicketsData,
+	    claveAdmin: this.claveAdmin,
             responsable: this.responsable
         };
         await fs.writeFile(this.dataFile, JSON.stringify(dataToSave, null, 4), 'utf8');
     }
 
-    async reiniciarSorteo(nuevoNombre, precio, descripcion, respNombre, respCedula, respTelefono) {
-        this.nombreSorteo = nuevoNombre;
-        this.precioTicket = precio;
-        this.descripcionSorteo = descripcion;
-        this.responsable = { nombre: respNombre, cedula: respCedula, telefono: respTelefono };
-        this.nextTicketNumber = 1;
-        this.soldNumbers.clear();
-        this.allSoldTicketsData = [];
-        this.ultimosGanadoresEncontrados = [];
-        this.ultimosNumerosBuscados = [];
-        await this.saveData();
-    }
+    async reiniciarSorteo(nuevoNombre, precio, descripcion, respNombre, respCedula, respTelefono, nuevaClave) {
+    this.nombreSorteo = nuevoNombre;
+    this.precioTicket = precio;
+    this.descripcionSorteo = descripcion;
+    this.responsable = { nombre: respNombre, cedula: respCedula, telefono: respTelefono };
+    this.claveAdmin = nuevaClave || "admin123"; // Guarda la clave que pongas en el formulario
+    this.nextTicketNumber = 1;
+    this.soldNumbers.clear();
+    this.allSoldTicketsData = [];
+    this.ultimosGanadoresEncontrados = [];
+    this.ultimosNumerosBuscados = [];
+    await this.saveData();
+}
 
     generarTicketAleatorio() {
         const ticketGenerado = [];

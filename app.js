@@ -2,8 +2,7 @@ const express = require('express');
 const PDFDocument = require('pdfkit');
 const QRCode = require('qrcode');
 const LoteriaApp = require('./loteria');
-const generarHTML = require('./vista');
-
+const { generarHTML } = require('./vista');
 const server = express();
 const PORT = 3000;
 
@@ -12,43 +11,80 @@ server.use(express.json());
 
 const appLoteria = new LoteriaApp();
 
+// =======================================================
+// RUTA PÚBLICA (Comprador - WhatsApp)
+// =======================================================
 server.get('/', async (req, res) => {
     await appLoteria.loadData();
-    res.send(generarHTML(appLoteria));
+    res.send(generarHTML(appLoteria, false)); 
+});
+
+// =======================================================
+// RUTA ADMINISTRATIVA PROTEGIDA
+// =======================================================
+server.get('/admin', async (req, res) => {
+    await appLoteria.loadData();
+    
+    // Capturamos la clave que se escribe en la URL (?pass=...)
+    const claveIntroducida = req.query.pass;
+    
+    // Si la clave es correcta, entras al panel completo
+    if (claveIntroducida === appLoteria.claveAdmin) {
+        res.send(generarHTML(appLoteria, true)); 
+    } else {
+        // Si es incorrecta o no la pusiste, te bloquea el acceso
+        res.send('<h1 style="color:red; text-align:center; font-family:Arial; margin-top:50px;">🔒 Acceso Denegado</h1>' + 
+                 '<p style="text-align:center; font-family:Arial; color:#666;">El enlace administrativo es inválido o requiere contraseña.</p>' +
+                 '<p style="text-align:center;"><a href="/" style="color:#2196F3; font-weight:bold; text-decoration:none;">Volver al Inicio</a></p>');
+    }
+});
+
+// ACCIÓN DE CONFIGURACIÓN: Guarda los datos e incluye la nueva clave
+server.post('/configurar', async (req, res) => {
+    const { sorteo, precio, descripcion, nombre, cedula, telefono, claveAdmin } = req.body;
+    await appLoteria.reiniciarSorteo(sorteo, precio, descripcion, nombre, cedula, telefono, claveAdmin);
+    
+    // Te redirige automáticamente a tu panel administrativo usando tu nueva clave
+    res.redirect(`/admin?pass=${claveAdmin}`); 
 });
 
 // ACCIÓN 1: Procesar la venta automática con dados
 server.post('/vender-aleatorio', async (req, res) => {
-    const { nombre, telefono } = req.body;
+    const { nombre, telefono, esAdmin } = req.body;
     const numerosAleatorios = appLoteria.generarTicketAleatorio();
     const nuevoTicket = await appLoteria.procesarVenta(numerosAleatorios, nombre, telefono);
-    if (nuevoTicket) res.redirect(`/descargar-pdf/${nuevoTicket.ticketId}`);
-    else res.redirect('/');
+    
+    if (nuevoTicket) {
+        res.redirect(`/descargar-pdf/${nuevoTicket.ticketId}?from=${esAdmin === 'true' ? 'admin' : 'root'}`);
+    } else {
+        res.redirect(esAdmin === 'true' ? '/admin' : '/');
+    }
 });
 
 // ACCIÓN 2: Procesar la venta manual con los números elegidos por el usuario
 server.post('/vender-manual', async (req, res) => {
-    const { nombre, telefono, g1, g2, g3, g4, g5 } = req.body;
-    
-    // Capturamos los números seleccionados del formulario y los volvemos enteros
+    const { nombre, telefono, g1, g2, g3, g4, g5, esAdmin } = req.body;
     const numerosElegidos = [parseInt(g1), parseInt(g2), parseInt(g3), parseInt(g4), parseInt(g5)];
-    
     const nuevoTicket = await appLoteria.procesarVenta(numerosElegidos, nombre, telefono);
-    if (nuevoTicket) res.redirect(`/descargar-pdf/${nuevoTicket.ticketId}`);
-    else res.redirect('/');
+    
+    if (nuevoTicket) {
+        res.redirect(`/descargar-pdf/${nuevoTicket.ticketId}?from=${esAdmin === 'true' ? 'admin' : 'root'}`);
+    } else {
+        res.redirect(esAdmin === 'true' ? '/admin' : '/');
+    }
 });
 
 server.post('/premiar', (req, res) => {
     const { n1, n2, n3, n4, n5 } = req.body;
     const ganadores = [parseInt(n1), parseInt(n2), parseInt(n3), parseInt(n4), parseInt(n5)];
     appLoteria.buscarBoletosGanadores(ganadores);
-    res.redirect('/');
+    res.redirect('/admin'); 
 });
 
 server.post('/configurar', async (req, res) => {
     const { sorteo, precio, descripcion, nombre, cedula, telefono } = req.body;
     await appLoteria.reiniciarSorteo(sorteo, precio, descripcion, nombre, cedula, telefono);
-    res.redirect('/');
+    res.redirect('/admin'); 
 });
 
 server.get('/reporte-disponibilidad', (req, res) => {
@@ -87,7 +123,7 @@ server.get('/descargar-pdf/:ticketId', async (req, res) => {
     doc.pipe(res);
 
     doc.rect(5, 5, 420, 200).lineWidth(1.5).stroke('#1e1e2f');
-    doc.fillColor('#1e1e2f').fontSize(14).text(`🎟️ ${ticket.sorteoName}`, 15, 15, { stroke: true });
+    doc.fillColor('#1e1e2f').fontSize(14).text(`Lotería: ${ticket.sorteoName}`, 15, 15, { stroke: true });
     doc.fillColor('#4CAF50').fontSize(14).text(`VALOR: $${ticket.precioTicket || '0.00'}`, 300, 15, { bold: true });
     doc.fillColor('#ff1e56').fontSize(12).text(`BOLETO #: ${ticket.ticketId}`, 15, 35, { bold: true });
     doc.fillColor('#555').fontSize(8).text(`Detalle: ${ticket.descripcionSorteo || 'Gran sorteo de la rifa.'}`, 15, 55, { width: 260, height: 25 });
@@ -109,6 +145,10 @@ server.get('/descargar-pdf/:ticketId', async (req, res) => {
     doc.image(qrBuffer, 310, 55);
 
     doc.end();
+});
+// RUTA EXCLUSIVA PARA DESCARGAR EL RESPALDO JSON (Solo para ti)
+server.get('/descargar-base-datos', (req, res) => {
+    res.download(appLoteria.dataFile, 'respaldo_loteria.json');
 });
 
 server.listen(PORT, async () => {
